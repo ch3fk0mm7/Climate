@@ -1,0 +1,105 @@
+<?php
+
+$server = "localhost";
+$user = "phpmyadmin";
+$password = "LifCenter";
+$dbname = "phpmyadmin";
+
+//Parameters for total humidity in a room
+//Absolute Luftfeuchte
+function AbsoluteHumidity($rH, $T){
+	$absHumidity = (6.112 * exp(17.67 * $T / ($T + 243.5)) * $rH * 2.1674) /
+			(273.15 + $T);
+	return $absHumidity;
+}
+
+$conn = mysqli_connect($server, $user, $password, $dbname);
+if (!$conn){die("Connection failed: " . mysqli_connect_error());}
+
+// Fetch Data from Today
+$sql = "SELECT * FROM Climate WHERE Timestamp > \"" . date("Y-m-d")."\"";
+$result = $conn->query($sql);
+
+if ($result->num_rows > 0) {
+	while($row = $result->fetch_assoc()){
+		/*echo  "{ datetime:" . $row["Timestamp"].
+			",tempSens:".$row["Temp_Sensor"] .
+			",humidSens:".$row["Humid_Sensor"].
+			",tempOut:".$row["Temp_Outside"].
+			",humidOut:".$row["Humid_Outside"]. "}, ";*/
+
+		$chart_data .= "{ datetime:'" . $row["Timestamp"].
+                        "',tempSens:".$row["Temp_Sensor"].
+                        ",humidSens:".$row["Humid_Sensor"].
+                      	",tempOut:".$row["Temp_Outside"].
+                        ",humidOut:".$row["Humid_Outside"]. "}, ";
+
+		//$CurrentTemperature_Room = $row["Temp_Sensor"];
+		//$CurrentTemperature_Out = $row["Temp_Outside"];
+		//$CurrentHumidity_Room = $row["Humid_Sensor"];
+		//$CurrentHumidity_Out = $row["Humid_Outside"];
+	}
+}
+$chart_data = substr ($chart_data, 0, -2);
+
+//Query Average Room Temperature and Humidity
+$sql = "SELECT AVG(Temp_Sensor) FROM Climate";
+if ($result = $conn->query($sql)){
+	while($row = $result->fetch_assoc()){
+		$avrgRoomTemperature = $row["AVG(Temp_Sensor)"];
+	}
+}
+$sql = "SELECT AVG(Humid_Sensor) FROM Climate";
+if ($result = $conn->query($sql)){
+        while($row = $result->fetch_assoc()){
+                $avrgRoomHumidity = $row["AVG(Humid_Sensor)"];
+        }
+}
+
+$conn->close();
+?>
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Climate</title>
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/morris.js/0.5.1/morris.css">
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/raphael/2.1.0/raphael-min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/morris.js/0.5.1/morris.min.js"></script>
+</head>
+
+<body>
+//<h2> Test
+//<?php echo $CurrentTemperature_Room . " °C / " . $CurrentTemperature_Out . " °C and " .
+//	$CurrentHumidity_Room . " % / " . CurrentHumidity_Out . " %";?>
+//</h2>
+<p>The Average Room Temper is <?php echo sprintf("%.2f", $avrgRoomTemperature);  ?> °C<br>
+The average room humidity is <?php echo sprintf("%.2f", $avrgRoomHumidity); ?> %<br>
+The there is <?php echo sprintf("%.2f",
+	AbsoluteHumidity($avrgRoomHumidity, $avrgRoomTemperature)); ?> g/m³ water in the air
+</p>
+<h1> Temerpature </h1>
+<div id="temperatureChart" style="height: 250px;"></div>
+<h1> Relative Humidity </h1>
+<div id="humidityChart" style="height: 250px;"></div>
+</body>
+</html>
+
+<script>
+new Morris.Line({
+  element: 'temperatureChart',
+  data: [<?php echo $chart_data; ?>],
+  xkey: 'datetime',
+  ykeys: ['tempSens','tempOut'],
+  labels: ['Room Temperature [°C]', 'Outdoor Temperature [°C]']
+});
+new Morris.Line({
+  element: 'humidityChart',
+  data: [<?php echo $chart_data; ?>],
+  xkey: 'datetime',
+  ykeys: ['humidSens','humidOut'],
+  labels: ['Room Humidity [%]', 'Outdoor Humidity [%]']
+});
+
+</script>
